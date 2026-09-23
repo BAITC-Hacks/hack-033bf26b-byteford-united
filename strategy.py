@@ -40,6 +40,12 @@ MIN_PRIOR_STD = 0.20
 # rollout.  Mock seeds showed that a looser bound could flip the total result.
 LCB_Z = 1.64
 MAX_BEAM_STATES = 4000
+MAX_CANDIDATES_PER_CELL = 4
+INITIAL_SOURCE_QUOTAS = {
+    "observed_smoothed": 12,
+    "target_history_fallback": 1,
+    "tariff_price_fallback": 1,
+}
 
 
 @dataclass
@@ -107,8 +113,9 @@ class CampaignOption:
 
 
 class CampaignStrategy:
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path, *, use_external_priors: bool = True):
         self.base_dir = Path(base_dir)
+        self.use_external_priors = bool(use_external_priors)
 
     def run(self, env) -> list[dict]:
         candidates = self._load_candidates(env)
@@ -124,18 +131,19 @@ class CampaignStrategy:
 
     def _load_candidates(self, env) -> list[Candidate]:
         frame = None
-        try:
-            priors = importlib.import_module("priors")
-            builder = getattr(priors, "build_candidates")
-            frame = builder(
-                profile=env.customer_profile.copy(),
-                tariffs=env.tariffs.copy(),
-                base_dir=self.base_dir,
-            )
-        except (ImportError, AttributeError, TypeError, ValueError, OSError, pd.errors.ParserError):
-            # Priors are an optional enhancement.  A broken data file or module
-            # must not invalidate already paid pilot contacts on the judge.
-            frame = None
+        if self.use_external_priors:
+            try:
+                priors = importlib.import_module("priors")
+                builder = getattr(priors, "build_candidates")
+                frame = builder(
+                    profile=env.customer_profile.copy(),
+                    tariffs=env.tariffs.copy(),
+                    base_dir=self.base_dir,
+                )
+            except (ImportError, AttributeError, TypeError, ValueError, OSError, pd.errors.ParserError):
+                # Priors are an optional enhancement.  A broken data file or
+                # module must not invalidate already paid pilot contacts.
+                frame = None
 
         if frame is None or len(frame) == 0:
             frame = self._fallback_candidate_frame(env.customer_profile, env.tariffs)
@@ -248,15 +256,34 @@ class CampaignStrategy:
         cleaned = cleaned.drop_duplicates(["current_tariff", "arpu_segment", "target_tariff"])
         cleaned = cleaned.sort_values(["priority", "segment_arpu_sum"], ascending=False)
 
+        # Keep source diversity before applying the per-cell cap.  Without this
+        # step, two strong observed transitions can remove every unobserved
+        # fallback from a cell, making the exploration quotas ineffective.
+        selected_indices: list[int] = []
+        for _, group in cleaned.groupby(
+            ["current_tariff", "arpu_segment"], observed=True, sort=False
+        ):
+            group_indices: list[int] = []
+            for source in group["source"].astype(str).drop_duplicates():
+                source_rows = group[group["source"].astype(str) == source]
+                group_indices.append(int(source_rows.index[0]))
+                if len(group_indices) >= MAX_CANDIDATES_PER_CELL:
+                    break
+            if len(group_indices) < MAX_CANDIDATES_PER_CELL:
+                for idx in group.index:
+                    if idx in group_indices:
+                        continue
+                    group_indices.append(int(idx))
+                    if len(group_indices) >= MAX_CANDIDATES_PER_CELL:
+                        break
+            selected_indices.extend(group_indices)
+
+        cleaned = cleaned.loc[selected_indices].sort_values(
+            ["priority", "segment_arpu_sum"], ascending=False
+        )
+
         result: list[Candidate] = []
-        per_cell: dict[tuple[str, str], int] = {}
         for row in cleaned.itertuples(index=False):
-            cell_key = str(row.current_tariff), str(row.arpu_segment)
-            # Preserve target diversity without allowing one large cell to
-            # consume the whole exploration budget.
-            if per_cell.get(cell_key, 0) >= 2:
-                continue
-            per_cell[cell_key] = per_cell.get(cell_key, 0) + 1
             result.append(
                 Candidate(
                     current_tariff=str(row.current_tariff),
@@ -306,16 +333,37 @@ class CampaignStrategy:
         return True
 
     def _run_initial_pilots(self, env, candidates: list[Candidate]) -> None:
-        used_cells: dict[tuple[str, str], int] = {}
+        limit = min(INITIAL_PILOTS, env.pilots_left)
+        used_cells: set[tuple[str, str]] = set()
         selected: list[Candidate] = []
-        for candidate in candidates:
-            # Initially test one target per cell; second targets remain as
-            # adaptive backups if the first hypothesis disappoints.
-            if used_cells.get(candidate.cell_key, 0) >= 1:
-                continue
+
+        def add_candidate(candidate: Candidate) -> bool:
+            if candidate.cell_key in used_cells or len(selected) >= limit:
+                return False
             selected.append(candidate)
-            used_cells[candidate.cell_key] = 1
-            if len(selected) >= min(INITIAL_PILOTS, env.pilots_left):
+            used_cells.add(candidate.cell_key)
+            return True
+
+        # Reserve a few pilots for transitions missing at the exact historical
+        # grain.  The judging population is deliberately shifted, so an agent
+        # that explores only historically observed winners is brittle.
+        for source, quota in INITIAL_SOURCE_QUOTAS.items():
+            added = 0
+            for candidate in candidates:
+                if candidate.source != source:
+                    continue
+                if source != "observed_smoothed" and candidate.prior_mean <= 0:
+                    continue
+                if add_candidate(candidate):
+                    added += 1
+                if added >= quota or len(selected) >= limit:
+                    break
+
+        # When priors are unavailable, or a source has too few candidates,
+        # fill the remaining slots by global priority.
+        for candidate in candidates:
+            add_candidate(candidate)
+            if len(selected) >= limit:
                 break
 
         for candidate in selected:

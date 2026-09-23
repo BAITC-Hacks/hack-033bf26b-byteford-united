@@ -113,6 +113,12 @@ class PriorsTest(unittest.TestCase):
         self.assertFalse((frame["current_tariff"] == frame["target_tariff"]).any())
         self.assertEqual(len(frame), len(self.priors))
 
+    def test_strategy_contract_is_deterministic(self):
+        first = build_candidates(self.profile, self.tariffs, ".")
+        second = build_candidates(self.profile, self.tariffs, ".")
+
+        pd.testing.assert_frame_equal(first, second)
+
 
 if __name__ == "__main__":
     unittest.main()

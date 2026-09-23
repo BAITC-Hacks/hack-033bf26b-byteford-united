@@ -75,11 +75,10 @@ def _clean_tariffs(tariffs: pd.DataFrame) -> pd.DataFrame:
         "tariffs",
     )
     result = tariffs.copy()
+    result = result.dropna(subset=["tariff_plan_code"]).copy()
     result["tariff_plan_code"] = result["tariff_plan_code"].astype(str)
     result["price_tariff"] = pd.to_numeric(result["price_tariff"], errors="coerce")
-    result = result.dropna(subset=["tariff_plan_code"]).drop_duplicates(
-        "tariff_plan_code", keep="last"
-    )
+    result = result.drop_duplicates("tariff_plan_code", keep="last")
     if result.empty:
         raise ValueError("tariffs contains no usable tariff_plan_code values")
     return result
