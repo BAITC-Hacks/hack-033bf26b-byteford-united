@@ -3,7 +3,32 @@
 Все команды запускаются из корня репозитория, где находятся `agent.py` и
 `local_eval.py`.
 
-## 1. Получить свежий код
+## 1. Подготовить Python-окружение
+
+Проект использует `numpy` и `pandas`. Создайте отдельное окружение, чтобы не
+устанавливать библиотеки в системный Python:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Проверка окружения:
+
+```powershell
+.\.venv\Scripts\python.exe -c "import numpy, pandas; print(numpy.__version__, pandas.__version__)"
+```
+
+Если команда печатает две версии без ошибки, окружение готово. Активация
+виртуального окружения не обязательна: команды ниже можно запускать через
+полный путь `.\.venv\Scripts\python.exe`.
+
+Ошибка `ModuleNotFoundError: No module named 'numpy'` означает, что команда была
+запущена системным Python вместо подготовленного `.venv` или зависимости ещё
+не установлены.
+
+## 2. Получить свежий код
 
 ```powershell
 git pull --ff-only origin main
@@ -12,10 +37,10 @@ git status
 
 Перед тестами `git status` не должен показывать неожиданные локальные изменения.
 
-## 2. Запустить автоматические тесты
+## 3. Запустить автоматические тесты
 
 ```powershell
-python -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
 Ожидаемый итог:
@@ -29,10 +54,10 @@ OK
 тарифов, лимиты бюджета и контактов, работу fallback и наличие разведки
 переходов без прямой истории.
 
-## 3. Выполнить один полный прогон
+## 4. Выполнить один полный прогон
 
 ```powershell
-python -X utf8 local_eval.py
+.\.venv\Scripts\python.exe -X utf8 local_eval.py
 ```
 
 Проверить в отчёте:
@@ -47,16 +72,16 @@ python -X utf8 local_eval.py
 из ТЗ — не более 10 именно финальных кампаний, которые печатает
 `make_submission.py`.
 
-## 4. Проверить устойчивость
+## 5. Проверить устойчивость
 
 ```powershell
-python -X utf8 local_eval.py --runs 10
+.\.venv\Scripts\python.exe -X utf8 local_eval.py --runs 10
 ```
 
 Для более серьёзной проверки:
 
 ```powershell
-python -X utf8 local_eval.py --runs 50
+.\.venv\Scripts\python.exe -X utf8 local_eval.py --runs 50
 ```
 
 Смотреть нужно не только на максимум, но прежде всего на:
@@ -68,10 +93,10 @@ python -X utf8 local_eval.py --runs 50
 
 Если часть запусков отрицательная, агент слишком доверяет шумным пилотам.
 
-## 5. Сравнить priors с fallback
+## 6. Сравнить priors с fallback
 
 ```powershell
-python -X utf8 benchmark.py --runs 10
+.\.venv\Scripts\python.exe -X utf8 benchmark.py --runs 10
 ```
 
 Команда запускает на одинаковых seed:
@@ -83,29 +108,29 @@ python -X utf8 benchmark.py --runs 10
 число финальных кампаний. Для более устойчивого сравнения используйте:
 
 ```powershell
-python -X utf8 benchmark.py --runs 50
+.\.venv\Scripts\python.exe -X utf8 benchmark.py --runs 50
 ```
 
 Мок-среда построена из той же истории, поэтому преимущество priors локально
 ожидаемо завышено. Этот тест доказывает корректность интеграции, но не будущий
 результат на скрытой аудитории.
 
-## 6. Пересобрать submission
+## 7. Пересобрать submission
 
 ```powershell
-python -X utf8 make_submission.py
+.\.venv\Scripts\python.exe -X utf8 make_submission.py
 git diff -- submission.csv
 ```
 
 `submission.csv` должен содержать от 1 до 10 строк. Повторный запуск без
 изменения кода должен создавать тот же файл.
 
-## 7. Финальный чек перед отправкой
+## 8. Финальный чек перед отправкой
 
 ```powershell
-python -m unittest discover -s tests -v
-python -X utf8 local_eval.py --runs 10
-python -X utf8 make_submission.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -X utf8 local_eval.py --runs 10
+.\.venv\Scripts\python.exe -X utf8 make_submission.py
 git status
 ```
 

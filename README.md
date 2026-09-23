@@ -5,11 +5,21 @@
 
 ## Быстрый запуск
 
-```bash
-python local_eval.py
-python local_eval.py --runs 10
-python benchmark.py --runs 10
-python make_submission.py
+Сначала создайте локальное окружение и установите зависимости:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Затем запускайте команды тем же интерпретатором:
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 local_eval.py
+.\.venv\Scripts\python.exe -X utf8 local_eval.py --runs 10
+.\.venv\Scripts\python.exe -X utf8 benchmark.py --runs 10
+.\.venv\Scripts\python.exe -X utf8 make_submission.py
 ```
 
 Финальный агент должен находиться в `agent.py` и предоставлять класс `Agent`
