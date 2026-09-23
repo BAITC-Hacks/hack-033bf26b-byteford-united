@@ -35,8 +35,9 @@ BREV_EVAL_RUNS=50 bash scripts/brev_setup.sh
 
 После успешного запуска каталог `.brev-evidence/` содержит:
 
-- `report.json` — commit SHA, ОС, Python, версии зависимостей, NVIDIA GPU,
-  длительности, exit codes и SHA-256 файла `submission.csv`;
+- `report.json` — commit SHA, чистота checkout до и после проверки, ОС, Python,
+  версии зависимостей, NVIDIA GPU, длительности, exit codes, хеши логов и
+  SHA-256 файла `submission.csv`;
 - `unittest.log` — результаты автоматических тестов;
 - `local_eval.log` — устойчивость агента на нескольких seed;
 - `benchmark.log` — A/B-сравнение historical priors и fallback;
@@ -44,7 +45,8 @@ BREV_EVAL_RUNS=50 bash scripts/brev_setup.sh
 
 `.brev-evidence/` исключён из Git: это отчёт конкретного запуска, а не исходный
 код. Для презентации сохраните `report.json` отдельно и сделайте скриншот
-терминала с успешными проверками и строкой `NVIDIA GPU`.
+терминала с успешными проверками и строкой `NVIDIA GPU`. Для финального evidence
+проверьте, что `checkout_clean_before` равен `true`, а все `exit_code` равны `0`.
 
 ## Безопасность
 

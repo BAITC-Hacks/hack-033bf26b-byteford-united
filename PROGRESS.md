@@ -31,3 +31,5 @@
 - Added an NVIDIA Brev bootstrap and evidence workflow that records the GPU,
   commit SHA, dependency versions, tests, stability, benchmark and submission
   hash without exposing environment variables or credentials.
+- Strengthened Brev evidence with clean-checkout markers and SHA-256 hashes for
+  every generated verification log.

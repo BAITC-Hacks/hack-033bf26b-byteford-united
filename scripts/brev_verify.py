@@ -31,12 +31,14 @@ def run_command(name: str, command: list[str], output_dir: Path) -> dict:
     duration = time.monotonic() - started
     log_path = output_dir / f"{name}.log"
     log_path.write_text(result.stdout, encoding="utf-8")
+    log_sha256 = hashlib.sha256(result.stdout.encode("utf-8")).hexdigest()
     print(f"[{name}] exit={result.returncode} duration={duration:.2f}s log={log_path}")
     return {
         "command": command,
         "exit_code": result.returncode,
         "duration_seconds": round(duration, 3),
         "log": str(log_path.relative_to(REPO_ROOT)),
+        "log_sha256": log_sha256,
     }
 
 
@@ -87,6 +89,7 @@ def main() -> int:
 
     output_dir = (REPO_ROOT / args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+    git_status_before = capture(["git", "status", "--porcelain"]) or ""
 
     python = sys.executable
     steps = {
@@ -118,7 +121,9 @@ def main() -> int:
         "git": {
             "commit": capture(["git", "rev-parse", "HEAD"]),
             "branch": capture(["git", "branch", "--show-current"]),
-            "status_porcelain": capture(["git", "status", "--porcelain"]) or "",
+            "status_before": git_status_before,
+            "status_after": capture(["git", "status", "--porcelain"]) or "",
+            "checkout_clean_before": not bool(git_status_before),
         },
         "runtime": {
             "python": sys.version,
