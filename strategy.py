@@ -30,9 +30,9 @@ import pandas as pd
 
 
 PER_CUSTOMER_STD = 0.804
-INITIAL_PILOTS = 14
+INITIAL_PILOTS = 10
 INITIAL_PILOT_SIZE = 80
-FOLLOWUP_PILOTS = 6
+FOLLOWUP_PILOTS = 10
 FOLLOWUP_PILOT_SIZE = 200
 MIN_CELL_SIZE = 30
 MIN_PRIOR_STD = 0.20
@@ -41,11 +41,45 @@ MIN_PRIOR_STD = 0.20
 LCB_Z = 1.64
 MAX_BEAM_STATES = 4000
 MAX_CANDIDATES_PER_CELL = 4
-INITIAL_SOURCE_QUOTAS = {
-    "observed_smoothed": 12,
-    "target_history_fallback": 1,
-    "tariff_price_fallback": 1,
-}
+@dataclass(frozen=True)
+class StrategyConfig:
+    """Tunable exploration and risk policy with the current defaults preserved."""
+
+    initial_pilots: int = INITIAL_PILOTS
+    initial_pilot_size: int = INITIAL_PILOT_SIZE
+    followup_pilots: int = FOLLOWUP_PILOTS
+    followup_pilot_size: int = FOLLOWUP_PILOT_SIZE
+    initial_observed_quota: int = 8
+    initial_target_fallback_quota: int = 1
+    initial_price_fallback_quota: int = 1
+    min_prior_std: float = MIN_PRIOR_STD
+    lcb_z: float = LCB_Z
+    min_pilots_for_rollout: int = 2
+    min_pilots_for_paid: int = 2
+
+    def __post_init__(self) -> None:
+        if self.initial_pilots < 0 or self.followup_pilots < 0:
+            raise ValueError("pilot counts must be non-negative")
+        if self.initial_pilots + self.followup_pilots > 20:
+            raise ValueError("total configured pilots cannot exceed 20")
+        for size in (self.initial_pilot_size, self.followup_pilot_size):
+            if not 10 <= size <= 200:
+                raise ValueError("pilot sizes must be between 10 and 200")
+        quota_total = (
+            self.initial_observed_quota
+            + self.initial_target_fallback_quota
+            + self.initial_price_fallback_quota
+        )
+        if quota_total > self.initial_pilots:
+            raise ValueError("initial source quotas cannot exceed initial_pilots")
+        if self.min_prior_std <= 0 or self.lcb_z <= 0:
+            raise ValueError("uncertainty parameters must be positive")
+        if self.min_pilots_for_rollout < 1:
+            raise ValueError("min_pilots_for_rollout must be positive")
+        if self.min_pilots_for_paid < self.min_pilots_for_rollout:
+            raise ValueError(
+                "min_pilots_for_paid cannot be lower than rollout minimum"
+            )
 
 
 @dataclass
@@ -60,6 +94,7 @@ class Candidate:
     prior_std: float = 0.35
     priority: float = 0.0
     source: str = "fallback"
+    prior_std_floor: float = MIN_PRIOR_STD
     precision: float = field(init=False)
     weighted_sum: float = field(init=False)
     pilot_count: int = 0
@@ -69,7 +104,7 @@ class Candidate:
     def __post_init__(self) -> None:
         # Historical data come from another population, so even a confident
         # historical estimate is deliberately treated as a weak prior.
-        effective_std = max(float(self.prior_std), MIN_PRIOR_STD)
+        effective_std = max(float(self.prior_std), float(self.prior_std_floor))
         self.precision = 1.0 / (effective_std * effective_std)
         self.weighted_sum = float(self.prior_mean) * self.precision
 
@@ -113,9 +148,16 @@ class CampaignOption:
 
 
 class CampaignStrategy:
-    def __init__(self, base_dir: Path, *, use_external_priors: bool = True):
+    def __init__(
+        self,
+        base_dir: Path,
+        *,
+        use_external_priors: bool = True,
+        config: StrategyConfig | None = None,
+    ):
         self.base_dir = Path(base_dir)
         self.use_external_priors = bool(use_external_priors)
+        self.config = config or StrategyConfig()
 
     def run(self, env) -> list[dict]:
         candidates = self._load_candidates(env)
@@ -296,6 +338,7 @@ class CampaignStrategy:
                     prior_std=float(row.prior_std),
                     priority=float(row.priority),
                     source=str(row.source),
+                    prior_std_floor=self.config.min_prior_std,
                 )
             )
         return result
@@ -333,7 +376,7 @@ class CampaignStrategy:
         return True
 
     def _run_initial_pilots(self, env, candidates: list[Candidate]) -> None:
-        limit = min(INITIAL_PILOTS, env.pilots_left)
+        limit = min(self.config.initial_pilots, env.pilots_left)
         used_cells: set[tuple[str, str]] = set()
         selected: list[Candidate] = []
 
@@ -347,7 +390,12 @@ class CampaignStrategy:
         # Reserve a few pilots for transitions missing at the exact historical
         # grain.  The judging population is deliberately shifted, so an agent
         # that explores only historically observed winners is brittle.
-        for source, quota in INITIAL_SOURCE_QUOTAS.items():
+        source_quotas = {
+            "observed_smoothed": self.config.initial_observed_quota,
+            "target_history_fallback": self.config.initial_target_fallback_quota,
+            "tariff_price_fallback": self.config.initial_price_fallback_quota,
+        }
+        for source, quota in source_quotas.items():
             added = 0
             for candidate in candidates:
                 if candidate.source != source:
@@ -367,7 +415,9 @@ class CampaignStrategy:
                 break
 
         for candidate in selected:
-            if not self._run_pilot(env, candidate, "sms", INITIAL_PILOT_SIZE):
+            if not self._run_pilot(
+                env, candidate, "sms", self.config.initial_pilot_size
+            ):
                 break
 
     @staticmethod
@@ -378,7 +428,7 @@ class CampaignStrategy:
     def _run_followup_pilots(self, env, candidates: list[Candidate]) -> None:
         observed = [candidate for candidate in candidates if candidate.pilot_count > 0]
         observed.sort(key=self._followup_value, reverse=True)
-        followup_limit = min(FOLLOWUP_PILOTS, env.pilots_left)
+        followup_limit = min(self.config.followup_pilots, env.pilots_left)
         completed = 0
         digital_used = 0
 
@@ -392,7 +442,9 @@ class CampaignStrategy:
                 continue
 
             channel = "sms"
-            digital_cost = FOLLOWUP_PILOT_SIZE * float(env.channels["digital_ads"]["cost_per_contact"])
+            digital_cost = self.config.followup_pilot_size * float(
+                env.channels["digital_ads"]["cost_per_contact"]
+            )
             expected_digital_net = (
                 candidate.posterior_mean
                 * float(env.channels["digital_ads"]["conversion_multiplier"])
@@ -407,7 +459,9 @@ class CampaignStrategy:
             ):
                 channel = "digital_ads"
 
-            if self._run_pilot(env, candidate, channel, FOLLOWUP_PILOT_SIZE):
+            if self._run_pilot(
+                env, candidate, channel, self.config.followup_pilot_size
+            ):
                 completed += 1
                 digital_used += int(channel == "digital_ads")
 
@@ -435,17 +489,25 @@ class CampaignStrategy:
     def _campaign_options(self, env, candidates: Iterable[Candidate]) -> list[CampaignOption]:
         options: list[CampaignOption] = []
         for candidate in candidates:
-            if candidate.pilot_count <= 0:
+            if candidate.pilot_count < self.config.min_pilots_for_rollout:
                 continue
-            safe_base_ratio = candidate.posterior_mean - LCB_Z * candidate.posterior_std
+            safe_base_ratio = (
+                candidate.posterior_mean
+                - self.config.lcb_z * candidate.posterior_std
+            )
             if safe_base_ratio <= 0:
                 continue
 
             pilot_overlap = min(1.0, candidate.pilot_contacts / max(candidate.segment_n, 1))
             marginal_fraction = max(0.50, 1.0 - 0.50 * pilot_overlap)
-            # A single pilot may justify a free push rollout, but spending cash
-            # requires an independent follow-up observation.
-            channels = ("push",) if candidate.pilot_count < 2 else ("push", "sms", "digital_ads")
+            # The current risk policy requires independent confirmation before
+            # any rollout.  Paid channels may use a stricter threshold through
+            # min_pilots_for_paid in alternative configurations.
+            channels = (
+                ("push",)
+                if candidate.pilot_count < self.config.min_pilots_for_paid
+                else ("push", "sms", "digital_ads")
+            )
             for channel in channels:
                 multiplier = float(env.channels[channel]["conversion_multiplier"])
                 cost_per_contact = float(env.channels[channel]["cost_per_contact"])

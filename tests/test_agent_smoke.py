@@ -3,7 +3,7 @@ import unittest
 from agent import Agent
 from mock_environment import make_mock_env
 from scoring_core import apply_filters
-from strategy import CampaignStrategy
+from strategy import CampaignStrategy, StrategyConfig
 
 
 class AgentSmokeTest(unittest.TestCase):
@@ -53,6 +53,20 @@ class AgentSmokeTest(unittest.TestCase):
             tested_sources
             & {"target_history_fallback", "tariff_price_fallback"}
         )
+
+    def test_strategy_config_validates_resource_and_pilot_limits(self):
+        default = StrategyConfig()
+        self.assertEqual(default.initial_pilots, 10)
+        self.assertEqual(default.followup_pilots, 10)
+        self.assertEqual(default.min_pilots_for_rollout, 2)
+        with self.assertRaises(ValueError):
+            StrategyConfig(initial_pilots=15, followup_pilots=6)
+        with self.assertRaises(ValueError):
+            StrategyConfig(initial_pilot_size=5)
+        with self.assertRaises(ValueError):
+            StrategyConfig(lcb_z=0)
+        with self.assertRaises(ValueError):
+            StrategyConfig(min_pilots_for_rollout=2, min_pilots_for_paid=1)
 
 
 if __name__ == "__main__":

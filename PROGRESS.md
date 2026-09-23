@@ -31,5 +31,14 @@
 - Added an NVIDIA Brev bootstrap and evidence workflow that records the GPU,
   commit SHA, dependency versions, tests, stability, benchmark and submission
   hash without exposing environment variables or credentials.
+- Added distribution-shift stress scenarios and a configuration benchmark so
+  strategy changes are judged by p10, worst-tail mean and minimum, not only by
+  the history-aligned mock median.
+- Rebalanced exploration from 14+6 to 10+10 pilots and now require two
+  observations before any final rollout. Across 40 shifted validation runs,
+  this raised p10 net from 1,338,411 to 1,703,177, worst-20% mean from
+  1,190,183 to 1,567,743, and minimum from 458,211 to 603,789 while reducing
+  average risk score from 12.1% to 9.4%. These are synthetic stress results,
+  not a prediction of the private judging score.
 - Strengthened Brev evidence with clean-checkout markers and SHA-256 hashes for
   every generated verification log.
