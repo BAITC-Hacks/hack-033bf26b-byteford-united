@@ -11,5 +11,11 @@
   contact, pilot and output limits.
 - Local mock evaluation over 10 seeds: 10/10 positive runs, median net gain
   649,011 and minimum net gain 115,569.
-- Next step: integrate hierarchical historical priors and compare the result
-  against the tariff-fit fallback without tuning to the mock effects.
+- Added historical priors, complete candidate generation, smoothing, and safe
+  fallback estimates for transitions missing from the history.
+- Integrated `priors.build_candidates(...)` with the stable strategy contract.
+- Integrated mock evaluation over 10 seeds: 10/10 positive runs, median net
+  gain 2,956,653 and minimum net gain 2,411,101. These values validate the
+  integration only; the hidden judging effects are intentionally different.
+- Next step: keep the historical prior weak and let repeated pilots dominate
+  decisions on the hidden judging population.
