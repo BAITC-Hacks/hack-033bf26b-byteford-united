@@ -1,0 +1,26 @@
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# Local tooling and editor state
+.idea/
+.vscode/
+.ipynb_checkpoints/
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db
