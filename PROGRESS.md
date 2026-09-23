@@ -17,5 +17,14 @@
 - Integrated mock evaluation over 10 seeds: 10/10 positive runs, median net
   gain 2,956,653 and minimum net gain 2,411,101. These values validate the
   integration only; the hidden judging effects are intentionally different.
-- Next step: keep the historical prior weak and let repeated pilots dominate
-  decisions on the hidden judging population.
+- Diversified the initial exploration: 12 history-backed pilots, one
+  target-history fallback and one tariff-price fallback. Repeated pilots still
+  dominate final decisions.
+- Added deterministic prior tests, exact final budget/contact checks and an A/B
+  benchmark against the tariff-fit fallback.
+- Extended mock evaluation over 50 seeds: 50/50 positive runs, median net gain
+  2,631,417 and minimum net gain 2,009,929. These values validate stability,
+  not the hidden judging score.
+- Added `TESTING.md` so the full test, benchmark and submission workflow can be
+  reproduced manually.
+- Next step: add presentation diagnostics without changing the judging logic.

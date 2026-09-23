@@ -8,6 +8,7 @@
 ```bash
 python local_eval.py
 python local_eval.py --runs 10
+python benchmark.py --runs 10
 python make_submission.py
 ```
 
@@ -60,6 +61,8 @@ python -m unittest tests.test_priors
   переходов и таблица кандидатов; при ошибке модуль заменяется безопасным
   fallback внутри стратегии.
 - `tests/test_agent_smoke.py` — проверка интерфейса и лимитов среды.
+- `benchmark.py` — A/B-сравнение стратегии с historical priors и без них.
+- `TESTING.md` — пошаговая инструкция по самостоятельной проверке.
 
 Функция `priors.build_candidates(profile, tariffs, base_dir)` возвращает
 `DataFrame` с обязательными колонками `current_tariff`, `arpu_segment`,
