@@ -20,6 +20,7 @@ secrets.json
 .vscode/
 .ipynb_checkpoints/
 *.log
+.brev-evidence/
 
 # OS metadata
 .DS_Store

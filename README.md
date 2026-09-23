@@ -84,6 +84,19 @@ pilot_shortlist = select_pilot_candidates(candidates, top_k=20)
 - `tests/test_agent_smoke.py` — проверка интерфейса и лимитов среды.
 - `benchmark.py` — A/B-сравнение стратегии с historical priors и без них.
 - `TESTING.md` — пошаговая инструкция по самостоятельной проверке.
+- `BREV.md` — воспроизводимый запуск и evidence на NVIDIA Brev.
+
+## NVIDIA Brev
+
+Для полного воспроизводимого запуска на Brev:
+
+```bash
+bash scripts/brev_setup.sh
+```
+
+Скрипт создаёт изолированное окружение, запускает тесты, `local_eval`, A/B
+benchmark и пересобирает submission. Логи и машиночитаемый отчёт сохраняются в
+`.brev-evidence/` и не попадают в Git. Подробности приведены в `BREV.md`.
 
 Функция `priors.build_candidates(profile, tariffs, base_dir)` возвращает
 `DataFrame` с обязательными колонками `current_tariff`, `arpu_segment`,

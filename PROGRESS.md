@@ -28,3 +28,6 @@
 - Added `TESTING.md` so the full test, benchmark and submission workflow can be
   reproduced manually.
 - Next step: add presentation diagnostics without changing the judging logic.
+- Added an NVIDIA Brev bootstrap and evidence workflow that records the GPU,
+  commit SHA, dependency versions, tests, stability, benchmark and submission
+  hash without exposing environment variables or credentials.
